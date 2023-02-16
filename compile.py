@@ -1,5 +1,6 @@
 from xml.etree.ElementInclude import include
 import subprocess
+import os
 
 file_name = "SpaceInvaderRe"
 
@@ -15,6 +16,13 @@ def main():
 
     #link
     subprocess.call(f"g++ *.o -o {file_name} -L {lib_dir} {lib}")
+
+    dir_name = "./"
+    test = os.listdir(dir_name)
+
+    for item in test:
+        if item.endswith(".o"):
+            os.remove(os.path.join(dir_name, item))
 
 if "__main__" == __name__:
     main()

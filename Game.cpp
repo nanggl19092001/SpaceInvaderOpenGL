@@ -11,7 +11,20 @@ Game::Game(){}
 
 Game::Game(size_t width, size_t height, size_t numAliens) {
 
-    this->numBullets = 0;
+    this->startScreenSprite.data = new uint8_t[100]{
+        1,1,0,0,0,0,0,0,0,0,
+        1,1,1,1,0,0,0,0,0,0,
+        1,1,1,1,1,1,0,0,0,0,
+        1,1,1,1,1,1,1,0,0,0,
+        1,1,1,1,1,1,1,1,1,0,
+        1,1,1,1,1,1,1,1,1,0,
+        1,1,1,1,1,1,1,0,0,0,
+        1,1,1,1,1,1,0,0,0,0,
+        1,1,1,1,0,0,0,0,0,0,
+        1,1,0,0,0,0,0,0,0,0
+    };
+    this->startScreenSprite.width = 10;
+    this->startScreenSprite.height = 10;
 
     this->alienSprites = new Sprite[7];
 
@@ -278,27 +291,67 @@ void Game::keyCallback(GLFWwindow *window, int key, int scancode, int action, in
 }
 
 void Game::keyCallbackImplement(int key, int scancode, int action, int mods){
+
+    switch (this->screen)
+    {
+        case MAIN_MENU:
+            keyCallbackImplementStartScreen(key, scancode, action, mods);
+            break;
+        case MAIN_GAME:
+            keyCallbackImplementMaingame(key, scancode, action, mods);
+            break;
+        default:
+            break;
+    }
+}
+
+void Game::keyCallbackImplementStartScreen(int key, int scancode, int action, int mods){
     switch(key){
         case GLFW_KEY_ESCAPE:
             if(action == GLFW_PRESS){
                 gameRunning = false;
                 break;
             }
-        case GLFW_KEY_LEFT:
+        case GLFW_KEY_UP:
             if(action == GLFW_PRESS)
-                move_dir -= 1;
-            else if(action == GLFW_RELEASE)
-                move_dir += 1;
+                this->cursor == 0 ? this->cursor = 1 : this->cursor = 0;
             break;
-        case GLFW_KEY_RIGHT:
+        case GLFW_KEY_DOWN:
             if(action == GLFW_PRESS)
-                move_dir += 1;
-            else if(action == GLFW_RELEASE)
-                move_dir -= 1;
+                this->cursor == 0 ? this->cursor = 1 : this->cursor = 0;
             break;
         case GLFW_KEY_SPACE:
             if(action == GLFW_PRESS)
-                firePress = true;
+                this->cursor == 0 ? this->screen = MAIN_GAME : this->screen = MAIN_MENU;
+        default:
+            break;
+    }
+}
+
+void Game::keyCallbackImplementMaingame(int key, int scancode, int action, int mods){
+    switch(key){
+        case GLFW_KEY_ESCAPE:
+            if(action == GLFW_PRESS){
+                this->gameRunning = false;
+                break;
+            }
+        case GLFW_KEY_LEFT:
+            if(action == GLFW_PRESS)
+                this->move_dir -= 1;
+            else if(action == GLFW_RELEASE)
+                this->move_dir += 1;
+            break;
+        case GLFW_KEY_RIGHT:
+            if(action == GLFW_PRESS)
+                this->move_dir == 0 ? this->move_dir += 1 : this->move_dir = 0;
+            else if(action == GLFW_RELEASE)
+                this->move_dir -= 1;
+            break;
+        case GLFW_KEY_SPACE:
+            if(action == GLFW_PRESS)
+                this->firePress = true;
+            else if(action == GLFW_RELEASE)
+                this->firePress = false;
         default :
             break;
     }
@@ -309,19 +362,69 @@ void Game::SetKeyCallback(GLFWwindow *window){
 }
 
 void Game::Render(Buffer *buffer){
+    switch(this->screen){
+        case MAIN_MENU:
+            RenderStartScreen(buffer);
+            break;
+        case MAIN_GAME:
+            RenderGameScreen(buffer);
+            break;
+        default:
+            break;
+    }
+}
 
-    RenderText(buffer);
+bool Game::RenderTextStartScreen(Buffer* buffer){
+
+    this->move_dir = 0;
+    
+    uint32_t TextRenderColor = Renderer::RgbToUint32(128, 0, 0);
+
+    Renderer::BufferTextDraw(buffer, this->textSpriteSheet, "START", this->width/2 - textSpriteSheet.width, this->height/2 + 30, TextRenderColor);
+
+    Renderer::BufferTextDraw(buffer, this->textSpriteSheet, "LEADERBOARD", this->width/2 - textSpriteSheet.width, this->height/2, TextRenderColor);
+
+    return true;
+}
+
+void Game::RenderStartScreen(Buffer* buffer){
+    RenderTextStartScreen(buffer);
+    Renderer::BufferSpriteDraw(buffer, startScreenSprite, this->width/2 - 30, this->height/2 + 30 - 30*this->cursor, Renderer::RgbToUint32(128, 0, 0));
+}
+
+bool Game::RenderTextGameScreen(Buffer* buffer){
+    
+    uint32_t TextRenderColor = Renderer::RgbToUint32(128, 0, 0);
+
+    Renderer::BufferTextDraw(buffer, this->textSpriteSheet, "SCORE: ", 10, 10, TextRenderColor);
+
+    Renderer::BufferNumberDraw(buffer, this->numberSpriteSheet, this->point, this->numberSpriteSheet.width + 40, 10, TextRenderColor);
+
+    return true;
+}
+
+void Game::RenderGameScreen(Buffer* buffer){
+    RenderTextGameScreen(buffer);
+    if(OffsetCheck()){
+        for(unsigned int i = 0; i < this->numAliens; i++){
+            if(this->aliens[i].type == ALIEN_TYPE_DEAD) continue;
+
+            if(this->aliens[i].y - 3 < 30) break;
+            this->aliens[i].y -= 3;
+        }
+        this->alienMove *= -1;
+    }
 
     for(size_t ai = 0; ai < this->numAliens; ai++){
         if(!deathCounter[ai]) continue;
-        const Alien& alien = this->aliens[ai];
+        Alien& alien = this->aliens[ai];
 
         if(alien.type == ALIEN_TYPE_DEAD && this->deathCounter[ai]){
             Renderer::BufferSpriteDraw(buffer, this->alienSprites[6], alien.x, alien.y, Renderer::RgbToUint32(128, 0, 0));
             --this->deathCounter[ai];
         }
         else{
-            //printf("%i", alien.type - 1);
+            alien.x += this->alienMove;
 
             const SpriteAnimation& animation = this->spriteAnimations[alien.type - 1];
             size_t currentFrame = animation.time / animation.frameDuration;
@@ -361,7 +464,13 @@ void Game::Render(Buffer *buffer){
                 continue;
             }
             
-            if(this->bullets[bi].dir < 0) continue;
+            if(this->bullets[bi].dir < 0){
+                if(this->bullets[bi].x >= this->player.x && this->bullets[bi].x < this->player.x + this->player.sprite.width && this->bullets[bi].y < this->player.y + this->player.sprite.height/2){
+                    this->screen = MAIN_MENU;
+                    ClearState();
+                }
+                continue;
+            }
 
             for(size_t ai = 0; ai < this->numAliens; ai++){
                 Alien& alien = this->aliens[ai];
@@ -454,11 +563,46 @@ bool Game::GenAlienBullets(){
     return true;
 }
 
-bool Game::RenderText(Buffer* buffer){
-    
-    uint32_t TextRenderColor = Renderer::RgbToUint32(128, 0, 0);
+bool Game::OffsetCheck(){
+    for(unsigned int i = 0; i < this->numAliens; i++){
+        if(this->aliens[i].type == ALIEN_TYPE_DEAD)
+            continue;
+        
+        if(this->aliens[i].x <= 0 || this->aliens[i].x + 11 >= this->width)
+            return true;
+    }
+    return false;
+}
 
-    Renderer::BufferTextDraw(buffer, this->textSpriteSheet, "SCORE: ", 20, this->height - 20, TextRenderColor);
+void Game::ClearState(){
+    this->point = 0;
+    this->numBullets = 0;
+    //init aliens position
+    for(unsigned int xi = 0; xi < 11; xi++){
+        for(unsigned int yi = 0; yi < 5; yi++){
+            this->aliens[xi + 11 * yi].y = 17 * yi + 128;
+            if(yi == 3){
+                this->aliens[xi + 11 * yi].type = ALIEN_TYPE_C;
+                this->aliens[xi + 11 * yi].x = 16 * xi + 20 - 1;
+            }   
+            else if(yi == 4)
+            {
+                this->aliens[xi + 11 * yi].type = ALIEN_TYPE_A;
+                this->aliens[xi + 11 * yi].x = 16 * xi + 20 + 1;
+            }
+            else
+            {
+                this->aliens[xi + 11 * yi].type = ALIEN_TYPE_B;
+                this->aliens[xi + 11 * yi].x = 16 * xi + 20;
+            }
+        }
+    }
 
-    return true;
+    for(unsigned int i = 0; i < this->numAliens; i++){
+        this->deathCounter[i] = 10;
+    }
+
+    //start pos of player
+    this->player.x = this->width/2;
+    this->player.y = 20;
 }
